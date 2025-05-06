@@ -1,0 +1,21 @@
+version: "3.10"
+services:
+  mnist_api:
+    build: .
+    image: mnist-fastapi:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    environment:
+      - MODEL_PATH=/app/model.pth
+    depends_on:
+      - training
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mnist-training:latest
+    command: python /app/training.py
+    volumes:
+      - ./app:/app

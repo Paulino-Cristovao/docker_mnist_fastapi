@@ -1,0 +1,28 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST Prediction</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">MNIST Digit Prediction</h1>
+        <p class="text-center">Upload an image of a handwritten digit (28x28) to get the prediction.</p>
+        
+        <!-- Form for uploading an image -->
+        <form action="/predict/" method="post" enctype="multipart/form-data" class="text-center">
+            <div class="form-group">
+                <input type="file" name="file" accept="image/*" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+        
+        {% if prediction is not none %}
+        <h2 class="text-center mt-4">Prediction: {{ prediction }}</h2>
+        {% endif %}
+    </div>
+</body>
+</html>
