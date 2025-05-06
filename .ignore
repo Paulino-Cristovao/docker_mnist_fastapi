@@ -15,6 +15,20 @@ dist/
 
 # Model checkpoints (if you don't want to track them)
 *.pth
+*.pyc 
+*.pkl
+*.gz
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tgz
+*.tar.lz
+*.tar.lzma
+*.tar.zst
+
+
 
 # OS-specific files
 .DS_Store
