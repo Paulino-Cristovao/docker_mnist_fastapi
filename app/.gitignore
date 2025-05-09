@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.*
+
+# Virtual environments
+venv/
+env/
+
+# ML model files
+*.pth
+model_epoch_*.pth
+model_final.pth
+
+# Data directories
+data/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+
+# mypy
+.mypy_cache/
