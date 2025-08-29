@@ -1,5 +1,12 @@
-version: "3.10"
+version: "3.8"
 services:
+  training:
+    build: .
+    image: mnist-training:latest
+    command: python /app/training.py
+    volumes:
+      - ./app:/app
+    
   mnist_api:
     build: .
     image: mnist-fastapi:latest
@@ -7,15 +14,6 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app
-    environment:
-      - MODEL_PATH=/app/model.pth
     depends_on:
-      - training
-  training:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: mnist-training:latest
-    command: python /app/training.py
-    volumes:
-      - ./app:/app
+      training:
+        condition: service_completed_successfully

@@ -4,6 +4,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 from tqdm import tqdm
+from datetime import datetime
+from torch.utils.tensorboard import SummaryWriter
+import os
 
 def train_mnist_model() -> None:
     """
@@ -18,7 +21,7 @@ def train_mnist_model() -> None:
         None
     """
     # Set training parameters
-    batch_size = 1024
+    batch_size = 256
     epochs = 11  # Increase epochs as needed
     checkpoint_interval = 5
     learning_rate = 0.01
@@ -27,6 +30,12 @@ def train_mnist_model() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # TensorBoard setup
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = os.path.join("runs", f"mnist_{run_id}")
+    writer = SummaryWriter(log_dir=log_dir)
+    print(f"TensorBoard logs will be written to: {log_dir}")
+
     # Prepare the MNIST dataset with additional workers for faster data loading
     transform = transforms.Compose([transforms.ToTensor()])
     train_loader = torch.utils.data.DataLoader(
@@ -34,37 +43,53 @@ def train_mnist_model() -> None:
         batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     # CNN model with 4 convolutional layers
-    model = nn.Sequential(
-        # Layer 1: Conv layer
-        nn.Conv2d(1, 32, kernel_size=3, padding=1),
-        nn.ReLU(),
-        # Layer 2: Conv layer
-        nn.Conv2d(32, 64, kernel_size=3, padding=1),
-        nn.ReLU(),
-        # Pooling to reduce spatial dimensions
-        nn.MaxPool2d(2),  # 28x28 -> 14x14
-        
-        # Layer 3: Conv layer
-        nn.Conv2d(64, 128, kernel_size=3, padding=1),
-        nn.ReLU(),
-        # Pooling to reduce spatial dimensions further
-        nn.MaxPool2d(2),  # 14x14 -> 7x7
-        
-        # Layer 4: Conv layer
-        nn.Conv2d(128, 256, kernel_size=3, padding=1),
-        nn.ReLU(),
-        nn.Flatten(),
-        nn.Linear(256 * 7 * 7, 10)
-    ).to(device)
+    class MyCNN(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            # Convolutional blocks
+            self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+            self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+            self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+            self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+
+            # Non-linearities and pooling
+            self.relu = nn.ReLU()
+            self.pool = nn.MaxPool2d(2)
+
+            # Classifier
+            self.flatten = nn.Flatten()
+            self.fc = nn.Linear(256 * 7 * 7, 10)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = self.relu(self.conv1(x))
+            x = self.relu(self.conv2(x))
+            x = self.pool(x)        # 28x28 -> 14x14
+            x = self.relu(self.conv3(x))
+            x = self.pool(x)        # 14x14 -> 7x7
+            x = self.relu(self.conv4(x))
+            x = self.flatten(x)
+            x = self.fc(x)
+            return x
+
+    # instantiate the model
+    model = MyCNN().to(device)
 
     # Define loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=learning_rate)
 
-    # Training loop with tqdm progress bars
-    for epoch in tqdm(range(1, epochs + 1), desc="Epochs"):
+    # Training loop with informative tqdm progress bars
+    global_step = 0
+    for epoch in range(1, epochs + 1):
         model.train()
-        for images, labels in tqdm(train_loader, leave=False, desc="Batches"):
+        running_loss = 0.0
+        correct = 0
+        processed = 0
+
+        # outer epoch progress
+        epoch_bar = tqdm(total=len(train_loader), desc=f"Epoch {epoch}/{epochs}", unit="batch")
+
+        for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
@@ -72,15 +97,54 @@ def train_mnist_model() -> None:
             loss.backward()
             optimizer.step()
 
+            # statistics for progress
+            batch_loss = loss.item() * images.size(0)
+            running_loss += batch_loss
+            preds = outputs.argmax(dim=1)
+            batch_correct = (preds == labels).sum().item()
+            correct += batch_correct
+            processed += labels.size(0)
+
+            # log to TensorBoard per batch
+            batch_acc = batch_correct / labels.size(0)
+            writer.add_scalar('Loss/train_batch', loss.item(), global_step)
+            writer.add_scalar('Accuracy/train_batch', batch_acc, global_step)
+            # optionally log learning rate
+            current_lr = optimizer.param_groups[0].get('lr', None)
+            if current_lr is not None:
+                writer.add_scalar('LR', current_lr, global_step)
+
+            global_step += 1
+
+            epoch_bar.update(1)
+            epoch_bar.set_postfix({
+                "avg_loss": f"{(running_loss/processed):.4f}",
+                "acc": f"{(correct/processed):.4f}"
+            })
+
+        epoch_bar.close()
+
         # Save checkpoint after every `checkpoint_interval` epochs
         if epoch % checkpoint_interval == 0:
             checkpoint_path = f'./model_epoch_{epoch}.pth'
             torch.save(model.state_dict(), checkpoint_path)
-            print(f"Checkpoint saved: {checkpoint_path}")
+            tqdm.write(f"Checkpoint saved: {checkpoint_path}")
+
+        # epoch summary
+        epoch_loss = running_loss / processed if processed > 0 else 0.0
+        epoch_acc = correct / processed if processed > 0 else 0.0
+        tqdm.write(f"Epoch {epoch} completed — Loss: {epoch_loss:.4f}  Acc: {epoch_acc:.4f}")
+
+        # log epoch metrics to TensorBoard
+        writer.add_scalar('Loss/train_epoch', epoch_loss, epoch)
+        writer.add_scalar('Accuracy/train_epoch', epoch_acc, epoch)
 
     # Save the final trained model
     torch.save(model.state_dict(), './model_final.pth')
     print("Training complete. Final model saved.")
+
+    # close TensorBoard writer
+    writer.close()
 
 if __name__ == "__main__":
     train_mnist_model()
