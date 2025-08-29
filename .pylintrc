@@ -1,0 +1,18 @@
+[MAIN]
+load-plugins=
+
+[MESSAGES CONTROL]
+disable=
+    too-many-instance-attributes,
+    too-many-locals,
+    too-many-statements,
+    duplicate-code,
+    import-error
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+max-attributes=10
+max-locals=20
+max-statements=80

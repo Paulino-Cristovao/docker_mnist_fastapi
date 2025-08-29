@@ -1,24 +1,27 @@
-# training.py - CNN with 4 Layers on MNIST
+"""MNIST CNN training module.
+
+Trains a 4-layer CNN on the MNIST dataset with TensorBoard logging
+and checkpoint saving capabilities.
+"""
+
+import os
+from datetime import datetime
+
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch import optim
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets, transforms
 from tqdm import tqdm
-from datetime import datetime
-from torch.utils.tensorboard import SummaryWriter
-import os
 
 def train_mnist_model() -> None:
     """
     Train a CNN model with 4 convolutional layers on the MNIST dataset.
 
     This function downloads the MNIST dataset (if not already present), defines a
-    CNN architecture with 4 convolutional layers using a sequential container,
-    and trains the model for a specified number of epochs. After training, the model's
-    state dictionary is saved to a file.
-
-    Returns:
-        None
+    CNN architecture with 4 convolutional layers, and trains the model for a 
+    specified number of epochs. The model's state dictionary is saved periodically
+    and at the end of training.
     """
     # Set training parameters
     batch_size = 256
@@ -42,9 +45,10 @@ def train_mnist_model() -> None:
         datasets.MNIST('./data', train=True, download=True, transform=transform),
         batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
-    # CNN model with 4 convolutional layers
     class MyCNN(nn.Module):
+        """CNN model with 4 convolutional layers for MNIST classification."""
         def __init__(self) -> None:
+            """Initialize the CNN model layers."""
             super().__init__()
             # Convolutional blocks
             self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
@@ -61,6 +65,14 @@ def train_mnist_model() -> None:
             self.fc = nn.Linear(256 * 7 * 7, 10)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Forward pass through the network.
+            
+            Args:
+                x: Input tensor of shape (batch_size, 1, 28, 28)
+                
+            Returns:
+                Output tensor of shape (batch_size, 10)
+            """
             x = self.relu(self.conv1(x))
             x = self.relu(self.conv2(x))
             x = self.pool(x)        # 28x28 -> 14x14

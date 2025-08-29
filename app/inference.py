@@ -1,20 +1,30 @@
-# inference.py
+"""MNIST model inference module.
+
+Provides functionality for loading trained MNIST models and performing
+prediction on image data.
+"""
+
 import os
 import glob
 import io
 from typing import List
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torchvision import transforms
 from PIL import Image
 from tqdm import tqdm
 
 
 class MyCNN(nn.Module):
-    """Same architecture used during training."""
+    """CNN model architecture matching the training model.
+    
+    Contains 4 convolutional layers with ReLU activation and max pooling,
+    followed by a fully connected layer for MNIST classification.
+    """
 
     def __init__(self) -> None:
+        """Initialize the CNN model layers."""
         super().__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
@@ -26,6 +36,14 @@ class MyCNN(nn.Module):
         self.fc = nn.Linear(256 * 7 * 7, 10)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the network.
+        
+        Args:
+            x: Input tensor of shape (batch_size, 1, 28, 28)
+            
+        Returns:
+            Output tensor of shape (batch_size, 10)
+        """
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
         x = self.pool(x)  # 28x28 -> 14x14
@@ -38,15 +56,20 @@ class MyCNN(nn.Module):
 
 
 def _find_checkpoint() -> str:
-    """Find the latest checkpoint file if available, otherwise fallback to model_final.pth."""
+    """Find the latest checkpoint file if available, otherwise fallback to model_final.pth.
+    
+    Returns:
+        Path to the most recent checkpoint file.
+    """
     checkpoint_files = glob.glob("./model_epoch_*.pth")
     if checkpoint_files:
-        def get_epoch(checkpoint_path: str) -> int:
-            filename = os.path.basename(checkpoint_path)
+        def get_epoch(checkpoint_file: str) -> int:
+            """Extract epoch number from checkpoint filename."""
+            filename = os.path.basename(checkpoint_file)
             try:
                 epoch_str = filename.split("_")[-1].split('.')[0]
                 return int(epoch_str)
-            except Exception:
+            except (ValueError, IndexError):
                 return 0
 
         last_checkpoint = max(checkpoint_files, key=get_epoch)
@@ -55,9 +78,17 @@ def _find_checkpoint() -> str:
     return "./model_final.pth"
 
 
-def _load_state_dict(path: str, device: torch.device) -> dict:
-    """Load a state dict with map_location and attempt to fix common prefix issues."""
-    state = torch.load(path, map_location=device)
+def _load_state_dict(model_path: str, target_device: torch.device) -> dict:
+    """Load a state dict with map_location and attempt to fix common prefix issues.
+    
+    Args:
+        model_path: Path to the model file.
+        target_device: Device to load the model on.
+        
+    Returns:
+        Cleaned state dictionary ready for loading.
+    """
+    state = torch.load(model_path, map_location=target_device, weights_only=True)
     if not isinstance(state, dict):
         # if someone saved the model directly
         return state
@@ -93,7 +124,7 @@ try:
     model.eval()
     print("Model loaded and set to eval mode.")
 except Exception as exc:  # pragma: no cover - fail loudly in inference
-    raise RuntimeError(f"Failed to load model state from {checkpoint_path}: {exc}")
+    raise RuntimeError(f"Failed to load model state from {checkpoint_path}: {exc}") from exc
 
 
 # Preprocessing transform matching training
@@ -147,23 +178,23 @@ if __name__ == "__main__":
         print("No sample images found in data/ to run inference on.")
     else:
         print(f"Running inference on {len(sample_paths)} sample images...")
-        
+
         # Get individual predictions for each image
-        for i, path in enumerate(sample_paths, 1):
+        for i, image_path in enumerate(sample_paths, 1):
             try:
-                with open(path, 'rb') as f:
+                with open(image_path, 'rb') as f:
                     prediction = predict_image(f.read())
-                    print(f"Image {i} ({os.path.basename(path)}): {prediction}")
-            except Exception as e:
-                print(f"Error processing image {i} ({os.path.basename(path)}): {e}")
-        
+                    print(f"Image {i} ({os.path.basename(image_path)}): {prediction}")
+            except (OSError, IOError) as e:
+                print(f"Error processing image {i} ({os.path.basename(image_path)}): {e}")
+
         # batch run with progress bar
         imgs = []
         for p in sample_paths:
             try:
                 with open(p, 'rb') as f:
                     imgs.append(f.read())
-            except Exception:
+            except (OSError, IOError):
                 continue
         results = predict_images_batch(imgs, show_progress=True)
         print("Batch predictions:", results)
